@@ -1,0 +1,51 @@
+{
+  "name": "@cryo/cryojs",
+  "version": "1.0.0",
+  "description": "Node.js tooling library for Cryo Engine - .cryo file parsing, validation, and compilation",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "cryojs": "./dist/cli/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "build:watch": "tsc -w",
+    "test": "jest",
+    "lint": "eslint src --ext .ts",
+    "clean": "rimraf dist"
+  },
+  "keywords": [
+    "cryo",
+    "game-engine",
+    "scene",
+    "parser",
+    "xml",
+    "lua"
+  ],
+  "author": "chevp",
+  "license": "MIT",
+  "dependencies": {
+    "fast-xml-parser": "^4.3.2",
+    "ajv": "^8.12.0",
+    "chalk": "^4.1.2",
+    "commander": "^11.1.0",
+    "glob": "^10.3.10"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.2",
+    "rimraf": "^5.0.5",
+    "@types/glob": "^8.1.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "dist",
+    "schemas"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/chevp/cryojs.git"
+  }
+}
