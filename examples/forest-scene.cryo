@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<cryo version="1.0" xmlns="https://cryo.dev/schema/1.0">
+<cryo version="1.0"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:noNamespaceSchemaLocation="../../cryo-specification/cryo-file-format/cryo-1.0.xsd">
   <meta>
     <name>Forest Scene</name>
     <description>A sample forest scene demonstrating .cryo file format</description>
