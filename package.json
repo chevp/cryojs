@@ -1,7 +1,7 @@
 {
   "name": "@cryo/cryojs",
-  "version": "1.0.0",
-  "description": "Node.js tooling library for Cryo Engine - .cryo file parsing, validation, and compilation",
+  "version": "3.0.0",
+  "description": "Node.js tooling library for Cryo Engine - .cryo file parsing, validation, compilation, and random-access container access",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
@@ -20,22 +20,25 @@
     "scene",
     "parser",
     "xml",
-    "lua"
+    "lua",
+    "container",
+    "tar",
+    "random-access"
   ],
   "author": "chevp",
   "license": "MIT",
   "dependencies": {
-    "fast-xml-parser": "^4.3.2",
     "ajv": "^8.12.0",
     "chalk": "^4.1.2",
     "commander": "^11.1.0",
+    "fast-xml-parser": "^5.10.0",
     "glob": "^10.3.10"
   },
   "devDependencies": {
+    "@types/glob": "^8.1.0",
     "@types/node": "^20.10.0",
-    "typescript": "^5.3.2",
     "rimraf": "^5.0.5",
-    "@types/glob": "^8.1.0"
+    "typescript": "^5.3.2"
   },
   "engines": {
     "node": ">=18.0.0"

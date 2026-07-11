@@ -6,19 +6,40 @@
 
 import { Command } from 'commander';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
-import { resolve, basename, extname } from 'path';
+import { resolve, basename, extname, dirname } from 'path';
 import chalk from 'chalk';
 import { glob } from 'glob';
 
 import { parse } from '../parser';
 import { compile, serialize, OutputFormat } from '../compiler';
+import { openContainer, packFolder, sniffFile, sha256Hex } from '../container';
 
 const program = new Command();
 
 program
   .name('cryojs')
-  .description('Cryo Engine tooling - .cryo file parser and compiler')
-  .version('1.0.0');
+  .description('Cryo Engine tooling - .cryo file parser and container')
+  .version('2.0.0');
+
+/**
+ * Resolve a `.cryo` input to XML text: for a legacy XML file, its content; for
+ * a tar container, its manifest scene entry read via the random-access API.
+ * Used by parse/compile/info so they transparently accept both forms (§4.4).
+ */
+async function resolveCryoXml(filePath: string): Promise<string> {
+  const kind = await sniffFile(filePath);
+  if (kind === 'container') {
+    const c = await openContainer(filePath);
+    try {
+      const entry = c.manifest.entry;
+      if (!entry) throw new Error('Container manifest has no scene entry');
+      return await c.readText(entry);
+    } finally {
+      await c.close();
+    }
+  }
+  return readFileSync(filePath, 'utf-8');
+}
 
 // ============================================================================
 // Parse Command
@@ -29,7 +50,7 @@ program
   .description('Parse a .cryo file and output the AST')
   .option('-o, --output <file>', 'Output file (default: stdout)')
   .option('--pretty', 'Pretty print JSON output', true)
-  .action((file: string, options: { output?: string; pretty?: boolean }) => {
+  .action(async (file: string, options: { output?: string; pretty?: boolean }) => {
     try {
       const filePath = resolve(file);
 
@@ -38,7 +59,7 @@ program
         process.exit(1);
       }
 
-      const content = readFileSync(filePath, 'utf-8');
+      const content = await resolveCryoXml(filePath);
       const result = parse(content);
 
       // Report errors and warnings
@@ -79,7 +100,7 @@ program
   .description('Compile a .cryo file to protocol buffer format')
   .option('-o, --output <file>', 'Output file')
   .option('-f, --format <format>', 'Output format: json, pbtxt', 'json')
-  .action((file: string, options: { output?: string; format?: string }) => {
+  .action(async (file: string, options: { output?: string; format?: string }) => {
     try {
       const filePath = resolve(file);
 
@@ -88,7 +109,7 @@ program
         process.exit(1);
       }
 
-      const content = readFileSync(filePath, 'utf-8');
+      const content = await resolveCryoXml(filePath);
       const parseResult = parse(content);
 
       // Report parse errors
@@ -267,7 +288,7 @@ program
 program
   .command('info <file>')
   .description('Show information about a .cryo file')
-  .action((file: string) => {
+  .action(async (file: string) => {
     try {
       const filePath = resolve(file);
 
@@ -276,7 +297,7 @@ program
         process.exit(1);
       }
 
-      const content = readFileSync(filePath, 'utf-8');
+      const content = await resolveCryoXml(filePath);
       const result = parse(content);
 
       if (result.errors.length > 0) {
@@ -357,6 +378,175 @@ function countComponents(entities: Array<{ components: Array<{ type: string }>; 
 
   return counts;
 }
+
+// ============================================================================
+// Container Commands (.cryo tar container — random-access API)
+// ============================================================================
+
+program
+  .command('pack <dir>')
+  .description('Pack a folder into a .cryo container (autoindex + sha256)')
+  .option('-o, --output <file>', 'Output container path (default: <dir>.cryo)')
+  .option('-e, --entry <path>', 'Primary scene entry inside the container')
+  .option('-n, --name <name>', 'Container display name')
+  .action(async (dir: string, options: { output?: string; entry?: string; name?: string }) => {
+    try {
+      const srcDir = resolve(dir);
+      if (!existsSync(srcDir)) {
+        console.error(chalk.red(`Error: Folder not found: ${srcDir}`));
+        process.exit(1);
+      }
+      const out = options.output
+        ? resolve(options.output)
+        : resolve(basename(srcDir) + '.cryo');
+      const manifest = await packFolder(srcDir, out, { entry: options.entry, name: options.name });
+      console.log(chalk.green(`Packed ${manifest.contents.length} entrie(s) -> ${out}`));
+      console.log(chalk.gray(`  entry: ${manifest.entry || '(none)'}`));
+    } catch (err) {
+      console.error(chalk.red(`Error: ${err}`));
+      process.exit(1);
+    }
+  });
+
+program
+  .command('ls <file>')
+  .description('List entries in a .cryo container (uses the offset index)')
+  .option('-l, --long', 'Show size and sha256')
+  .action(async (file: string, options: { long?: boolean }) => {
+    try {
+      const filePath = resolve(file);
+      if ((await sniffFile(filePath)) !== 'container') {
+        console.error(chalk.yellow('Not a container (.cryo tar). Legacy XML .cryo has no entries.'));
+        process.exit(1);
+      }
+      const c = await openContainer(filePath);
+      try {
+        for (const e of c.list()) {
+          if (options.long) {
+            const sha = e.sha256 ? e.sha256.slice(0, 12) : '-'.repeat(12);
+            console.log(`${String(e.size).padStart(9)}  ${sha}  ${e.path}`);
+          } else {
+            console.log(e.path);
+          }
+        }
+      } finally {
+        await c.close();
+      }
+    } catch (err) {
+      console.error(chalk.red(`Error: ${err}`));
+      process.exit(1);
+    }
+  });
+
+program
+  .command('cat <file> <entry>')
+  .description('Print one container entry (random-access seek+read)')
+  .action(async (file: string, entry: string) => {
+    try {
+      const filePath = resolve(file);
+      const c = await openContainer(filePath);
+      try {
+        process.stdout.write(await c.read(entry));
+      } finally {
+        await c.close();
+      }
+    } catch (err) {
+      console.error(chalk.red(`Error: ${err}`));
+      process.exit(1);
+    }
+  });
+
+program
+  .command('inspect <file>')
+  .description('Show container manifest + contents (no scan of entry bodies)')
+  .action(async (file: string) => {
+    try {
+      const filePath = resolve(file);
+      const c = await openContainer(filePath);
+      try {
+        const m = c.manifest;
+        console.log(chalk.bold('\nContainer:'));
+        console.log(`  Format:  ${m.format}`);
+        console.log(`  Version: ${m.version}`);
+        console.log(`  Name:    ${m.name || '(unnamed)'}`);
+        console.log(`  Entry:   ${m.entry || '(none)'}`);
+        console.log(chalk.bold('\nContents:'));
+        for (const e of c.list()) {
+          console.log(`  ${chalk.cyan(e.type.padEnd(8))} ${String(e.size).padStart(9)}  ${e.path}`);
+        }
+        console.log('');
+      } finally {
+        await c.close();
+      }
+    } catch (err) {
+      console.error(chalk.red(`Error: ${err}`));
+      process.exit(1);
+    }
+  });
+
+program
+  .command('verify <file>')
+  .description('Verify entry sha256 against the container manifest')
+  .action(async (file: string) => {
+    try {
+      const filePath = resolve(file);
+      const c = await openContainer(filePath);
+      try {
+        let checked = 0;
+        let failed = 0;
+        for (const e of c.manifest.contents) {
+          if (!e.sha256) continue;
+          checked++;
+          const actual = sha256Hex(await c.read(e.path));
+          if (actual !== e.sha256) {
+            failed++;
+            console.log(chalk.red(`  MISMATCH ${e.path}`));
+            console.log(chalk.gray(`    expected ${e.sha256}`));
+            console.log(chalk.gray(`    actual   ${actual}`));
+          }
+        }
+        if (checked === 0) {
+          console.log(chalk.yellow('No sha256 hashes in manifest to verify.'));
+        } else if (failed === 0) {
+          console.log(chalk.green(`OK — ${checked} entrie(s) verified.`));
+        } else {
+          console.log(chalk.red(`FAILED — ${failed}/${checked} entrie(s) mismatched.`));
+          process.exit(1);
+        }
+      } finally {
+        await c.close();
+      }
+    } catch (err) {
+      console.error(chalk.red(`Error: ${err}`));
+      process.exit(1);
+    }
+  });
+
+program
+  .command('unpack <file>')
+  .description('Extract a container to a folder (escape hatch — NOT the normal path)')
+  .option('-o, --outdir <dir>', 'Output directory', './out')
+  .action(async (file: string, options: { outdir?: string }) => {
+    try {
+      const filePath = resolve(file);
+      const outDir = resolve(options.outdir || './out');
+      const c = await openContainer(filePath);
+      try {
+        const { mkdirSync, writeFileSync: writeFile } = await import('fs');
+        for (const e of c.list()) {
+          const dest = resolve(outDir, e.path);
+          mkdirSync(dirname(dest), { recursive: true });
+          writeFile(dest, await c.read(e.path));
+        }
+        console.log(chalk.green(`Unpacked ${c.list().length} entrie(s) -> ${outDir}`));
+      } finally {
+        await c.close();
+      }
+    } catch (err) {
+      console.error(chalk.red(`Error: ${err}`));
+      process.exit(1);
+    }
+  });
 
 // Parse command line arguments
 program.parse();

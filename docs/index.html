@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cryo Container Viewer</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%23020617'/%3E%3Ctext x='50' y='70' font-size='58' text-anchor='middle' fill='%2338bdf8'%3E%E2%9D%84%3C/text%3E%3C/svg%3E" />
+  <style>html,body{background:#020617}</style>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
+        integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A=="
+        crossorigin="anonymous" referrerpolicy="no-referrer" />
+  <link rel="stylesheet" href="css/variables.css" />
+  <link rel="stylesheet" href="css/base.css" />
+  <link rel="stylesheet" href="css/layout.css" />
+  <link rel="stylesheet" href="css/sidebar.css" />
+  <link rel="stylesheet" href="css/topbar.css" />
+  <link rel="stylesheet" href="css/viewer.css" />
+</head>
+<body>
+  <!-- Sidebar: brand + container meta + entry tree -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-logo">❄</div>
+      <div class="brand-name">Cryo<small>Viewer</small></div>
+      <button class="icon-btn brand-collapse" id="collapseBtn" title="Collapse">
+        <i class="fa-solid fa-chevron-left"></i>
+      </button>
+    </div>
+    <div class="sidebar-scroll">
+      <div class="nav-section" id="fileSection" hidden>
+        <div class="nav-label"><span>File</span></div>
+        <div class="nav-list" id="fileNode"></div>
+      </div>
+      <div class="side-meta" id="sideMeta" hidden></div>
+      <div class="nav-section">
+        <div class="nav-label"><span>Entries</span><span class="count" id="entryCount"></span></div>
+        <div class="nav-list" id="tree"></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main: topbar + preview view + footer -->
+  <main class="main">
+    <div class="topbar">
+      <div class="topbar-left">
+        <button class="icon-btn ghost-only" id="openSidebarBtn" title="Show sidebar">
+          <i class="fa-solid fa-bars"></i>
+        </button>
+        <span class="view-title" id="viewTitle"><i class="fa-solid fa-snowflake"></i> Cryo Container</span>
+      </div>
+      <div class="topbar-right">
+        <button class="btn-primary" id="openBtn"><i class="fa-solid fa-folder-open"></i> Open .cryo</button>
+        <input type="file" id="fileInput" accept=".cryo" hidden />
+      </div>
+    </div>
+
+    <div class="tool-outlet">
+      <section class="view active">
+        <div class="tool-view">
+          <div class="tool-toast" id="toast" hidden></div>
+          <div class="validation" id="validation" hidden></div>
+          <div class="dropzone" id="dropzone">
+            <div class="flake-lg"><i class="fa-solid fa-snowflake"></i></div>
+            <div class="dz-title">Drop a .cryo file</div>
+            <button class="btn-primary" id="chooseBtn"><i class="fa-solid fa-folder-open"></i> Choose file</button>
+          </div>
+          <div class="tool-preview" id="panel" hidden></div>
+        </div>
+      </section>
+    </div>
+
+    <footer class="page-footer">
+      <span id="footInfo">No container loaded</span>
+      <span class="mono">.cryo · random-access container</span>
+    </footer>
+  </main>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

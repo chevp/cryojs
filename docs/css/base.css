@@ -1,0 +1,73 @@
+/* base.css — reset, body/app-shell layout hook, generic buttons, scrollbars
+   (texturekit structure) + antarctica.io ambient helpers. */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100vh; overflow: hidden; }
+
+body {
+  font-family: var(--sans);
+  background: var(--bg-canvas);
+  color: var(--text);
+  display: flex;
+  font-size: 14px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* <app-shell> is display:contents so <cw-sidebar> + <main> become direct
+   flex children of <body> (texturekit pattern). */
+app-shell { display: contents; }
+
+button { font-family: inherit; font-size: 13px; cursor: pointer; border: none; background: none; color: inherit; }
+button:disabled { opacity: 0.35; cursor: not-allowed; }
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+.icon-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s, color 0.12s;
+  flex-shrink: 0;
+  font-size: 13px;
+  text-decoration: none;
+}
+.icon-btn:hover:not(:disabled) { background: var(--bg-hover); color: var(--text); }
+
+/* antarctica.io ambient helpers */
+.grid-bg {
+  background-image:
+    linear-gradient(rgba(59, 130, 246, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(59, 130, 246, 0.05) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+.glass {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.gradient-text {
+  background: linear-gradient(135deg, #7dd3fc 0%, #38bdf8 50%, #2563eb 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.mono { font-family: var(--mono); }
+
+/* Scrollbars (texturekit + arctic hover) */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(56, 189, 248, 0.3);
+  background-clip: padding-box;
+}

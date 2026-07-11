@@ -1,0 +1,33 @@
+/* variables.css — texturekit token names, antarctica.io values
+   (slate-950 canvas, arctic-blue accent, Inter type). */
+:root {
+  --bg-canvas: #020617;   /* slate-950 */
+  --bg-sidebar: #0b1120;  /* between slate-950 / slate-900 */
+  --bg-elevated: #0f172a; /* slate-900 */
+  --bg-hover: rgba(255, 255, 255, 0.06);
+  --bg-active: rgba(56, 189, 248, 0.16);
+  --border: rgba(255, 255, 255, 0.10);
+  --border-strong: rgba(56, 189, 248, 0.40);
+  --text: #f1f5f9;        /* slate-100 */
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
+
+  --accent: #38bdf8;      /* arctic-400 */
+  --accent-strong: #0284c7;
+  --accent-soft: #7dd3fc;
+  --accent-bg: rgba(56, 189, 248, 0.16);
+  --accent-text: #04121f;
+
+  --green: #4ade80;
+  --orange: #fb923c;
+  --red: #f87171;
+  --blue: #60a5fa;
+
+  --radius-lg: 22px;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-xs: 6px;
+
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
