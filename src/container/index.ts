@@ -9,9 +9,15 @@
 export {
   CryoContainer,
   openContainer,
-  sha256Hex,
 } from './reader';
 export type { OpenOptions } from './reader';
+
+export { sha256Hex } from './sha256';
+export type { Hasher } from './sha256';
+
+export { MemorySource, isWritableSource } from './source';
+export type { RandomAccessSource, WritableSource } from './source';
+export { FsSource } from './fs-source';
 
 export { packFolder } from './writer';
 export type { PackOptions } from './writer';
@@ -23,20 +29,34 @@ export {
   createManifest,
   parseManifest,
   serializeManifest,
+  validateManifest,
   inferContentType,
 } from './manifest';
 export type {
   ContainerManifest,
+  ContainerKind,
   ContentEntry,
   ContentType,
 } from './manifest';
 
-export { sniffFile, sniffBytes } from './sniff';
+export {
+  MANIFEST_SCHEMA,
+  MANIFEST_SCHEMA_URL,
+  KNOWN_KINDS,
+  validateManifestSchema,
+  validateKindSchema,
+} from './schema';
+
+export { sniffBytes } from './sniff';
 export type { CryoKind } from './sniff';
+export { sniffFile } from './sniff-file';
+
+export { inspectBytes, entryBytes } from './report';
+export type { CryoReport, EntryInfo, ReportMessage } from './report';
 
 export {
   scanTarBuffer,
-  scanTarFd,
+  scanTarSource,
   encodeTar,
   encodeTarEntry,
   TAR_BLOCK,

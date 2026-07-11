@@ -1,14 +1,12 @@
 /**
  * Cryo Container Viewer — load a `.cryo` file and inspect its entries in the
- * browser. Parses the tar client-side (js/tar.js), lists entries in the sidebar
- * and previews the selected entry (scene/text/image/json) in the main view.
- * Nothing is uploaded; everything runs locally.
+ * browser. Tar scanning, manifest validation and content typing all come from
+ * the SAME @cryo/cryojs core as Node, bundled to js/cryo-core.js (no hand-written
+ * twins). Lists entries in the sidebar and previews the selected entry. Nothing
+ * is uploaded; everything runs locally.
  */
 
-import { readTar, entryBytes } from './tar.js';
-import { validateCryo } from './validate.js';
-
-const MANIFEST_PATH = 'manifest.json';
+import { inspectBytes, entryBytes, inferContentType, MANIFEST_PATH } from './cryo-core.js';
 
 const els = {
   fileInput: document.getElementById('fileInput'),
@@ -45,20 +43,13 @@ async function loadFile(file) {
   // to another program as the complete file (never a single entry).
   const fileRef = { name: file.name, blob: new Blob([buf], { type: 'application/octet-stream' }) };
 
-  // Validity: a tar containing manifest.json.
-  const report = validateCryo(buf);
+  // Validity + entries in one pass, from the shared core (enforces the 5
+  // required manifest keys + per-kind rules — same as Node).
+  const report = inspectBytes(buf);
   renderValidation(report);
 
-  // Parse for display (lenient); fall back to the validator's entry list if the
-  // archive is too broken for the reader.
-  let entries;
-  let bytes;
-  try {
-    ({ entries, bytes } = readTar(buf));
-  } catch {
-    entries = report.entries;
-    bytes = new Uint8Array(buf);
-  }
+  const entries = report.entries;
+  const bytes = new Uint8Array(buf);
   if (!entries.length) return;
 
   const manifest = report.manifest;
@@ -126,15 +117,6 @@ const ICONS = {
   other: 'fa-file',
 };
 
-function classify(path) {
-  if (path === MANIFEST_PATH || path.startsWith('.kosmos/')) return 'meta';
-  if (path.startsWith('scenes/') || path.endsWith('.cryo.xml') || path.endsWith('.xml')) return 'scene';
-  if (path.startsWith('scripts/') || path.endsWith('.lua')) return 'script';
-  if (path.startsWith('compiled/')) return 'compiled';
-  if (path.startsWith('assets/') || /\.(png|jpg|jpeg|gif|webp|glb|gltf)$/i.test(path)) return 'asset';
-  return 'other';
-}
-
 function fmtSize(n) {
   if (n < 1024) return n + ' B';
   if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
@@ -160,7 +142,7 @@ function renderSidebar() {
 
   els.tree.innerHTML = '';
   for (const e of state.entries) {
-    const type = classify(e.path);
+    const type = inferContentType(e.path);
     const row = document.createElement('button');
     row.className = 'nav-item';
     row.dataset.path = e.path;

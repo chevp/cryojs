@@ -1,15 +1,29 @@
 {
   "name": "@cryo/cryojs",
-  "version": "3.1.0",
+  "version": "3.1.1",
   "description": "Node.js tooling library for Cryo Engine - .cryo file parsing, validation, compilation, and random-access container access",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "browser": "dist/browser.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "browser": "./dist/browser.js",
+      "default": "./dist/index.js"
+    },
+    "./browser": {
+      "types": "./dist/browser.d.ts",
+      "default": "./dist/browser.js"
+    }
+  },
   "bin": {
     "cryojs": "./dist/cli/index.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && npm run build:browser",
     "build:watch": "tsc -w",
+    "build:browser": "node scripts/build-browser.js",
+    "schema:publish": "node scripts/publish-schema.js",
     "test": "jest",
     "lint": "eslint src --ext .ts",
     "clean": "rimraf dist"
@@ -37,6 +51,7 @@
   "devDependencies": {
     "@types/glob": "^8.1.0",
     "@types/node": "^20.10.0",
+    "esbuild": "^0.28.1",
     "rimraf": "^5.0.5",
     "typescript": "^5.3.2"
   },

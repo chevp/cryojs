@@ -33,19 +33,6 @@ cryojs validate "scenes/*.cryo"
 cryojs info scene.cryo
 ```
 
-## .cryo File Format
-
-XML-based DSL for defining scenes and entities with embedded Lua scripts.
-See [cryo-specification](../cryo-specification/cryo-file-format/) for the complete specification.
-
-## Protocol Mapping
-
-Compiled output maps to cryo-protocol protobuf messages:
-
-- `<entity>` -> `chevp.cryo.entity.Entity`
-- `<transform>` -> `chevp.cryo.common.CryoTransform`
-- Components -> `chevp.cryo.entity.*Component`
-
 ## Development
 
 ```bash

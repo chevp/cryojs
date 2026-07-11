@@ -1,29 +1,20 @@
 /**
  * reader — `CryoContainer`, the API analogue of a SQLite handle.
  *
- * Open the *one* file, keep its descriptor, scan the tar header index once, then
- * serve entries by positioned reads. Nothing is unpacked to disk
- * (MIGRATION-cryo-container.md §4.2). The write path (`put`/`remove`/`flush`)
- * buffers changes and rewrites the tar atomically on `flush` — tar has no true
- * in-place variable-size insert — while reads stay real random-access.
+ * The container reads through a `RandomAccessSource` (source.ts): scan the tar
+ * header index once, then serve entries by positioned reads. Nothing is unpacked
+ * to disk/memory. `fs` lives only in `FsSource`; the same class runs over a
+ * `MemorySource` (isomorphic — see fromBuffer). The write path (`put`/`remove`/
+ * `flush`) buffers changes and atomically replaces the whole backing on `flush`
+ * (tar has no in-place variable-size insert), while reads stay random-access.
  */
 
-import { createHash } from 'crypto';
-import { Readable } from 'stream';
-import {
-  open,
-  read as fsRead,
-  close,
-  createReadStream,
-  promises as fsp,
-} from 'fs';
-import { basename, dirname, join } from 'path';
-import { promisify } from 'util';
+import type { Readable } from 'stream';
 
 import {
   IndexEntry,
   TarIndex,
-  scanTarFd,
+  scanTarSource,
   encodeTar,
 } from './tar-index';
 import {
@@ -35,16 +26,15 @@ import {
   parseManifest,
   serializeManifest,
 } from './manifest';
+import {
+  RandomAccessSource,
+  MemorySource,
+  isWritableSource,
+} from './source';
+import { FsSource } from './fs-source';
+import { Hasher, sha256Hex } from './sha256';
 
-const openAsync = promisify(open);
-const closeAsync = promisify(close);
-const readAsync = promisify(fsRead) as unknown as (
-  fd: number,
-  buffer: Buffer,
-  offset: number,
-  length: number,
-  position: number
-) => Promise<{ bytesRead: number; buffer: Buffer }>;
+const TEXT = new TextDecoder('utf-8');
 
 /** Reject absolute paths, `..` traversal and back-slashes (§3 guard). */
 function assertSafePath(path: string): void {
@@ -54,52 +44,65 @@ function assertSafePath(path: string): void {
 }
 
 export interface OpenOptions {
-  /** Open writable so `flush` can atomically replace the file (default true). */
-  writable?: boolean;
+  /** Hasher for sha256 on write. Defaults to Node crypto; pass undefined to skip. */
+  hasher?: Hasher;
 }
 
 export class CryoContainer {
-  readonly path: string;
-  private fd: number;
+  readonly source: RandomAccessSource;
   private index: TarIndex;
   private _manifest: ContainerManifest;
+  private hasher?: Hasher;
   private closed = false;
 
-  /** Pending writes: value = Buffer to put, or null = remove. */
-  private pending = new Map<string, Buffer | null>();
+  /** Pending writes: value = bytes to put, or null = remove. */
+  private pending = new Map<string, Uint8Array | null>();
 
   private constructor(
-    path: string,
-    fd: number,
+    source: RandomAccessSource,
     index: TarIndex,
-    manifest: ContainerManifest
+    manifest: ContainerManifest,
+    hasher?: Hasher
   ) {
-    this.path = path;
-    this.fd = fd;
+    this.source = source;
     this.index = index;
     this._manifest = manifest;
+    this.hasher = hasher;
   }
 
-  /** Open a container: one fd, one header scan, manifest read from entry #1. */
-  static async open(path: string, _opts: OpenOptions = {}): Promise<CryoContainer> {
-    const fd = await openAsync(path, 'r');
+  /** Node convenience: open a file path, backed by fs positioned reads. */
+  static async open(path: string, opts: OpenOptions = {}): Promise<CryoContainer> {
+    const source = await FsSource.open(path);
     try {
-      const stat = await fsp.stat(path);
-      const index = await scanTarFd(fd, stat.size);
-      const manifestEntry = index.get(MANIFEST_PATH);
-      let manifest: ContainerManifest;
-      if (manifestEntry) {
-        const buf = await readBody(fd, manifestEntry);
-        manifest = parseManifest(buf.toString('utf-8'));
-      } else {
-        // Tolerate a container without a manifest: synthesize a minimal one.
-        manifest = createManifest('');
-      }
-      return new CryoContainer(path, fd, index, manifest);
+      return await CryoContainer.fromSource(source, {
+        hasher: 'hasher' in opts ? opts.hasher : sha256Hex,
+      });
     } catch (err) {
-      await closeAsync(fd).catch(() => undefined);
+      await source.close();
       throw err;
     }
+  }
+
+  /** Open an in-memory container (isomorphic — the browser path). */
+  static fromBuffer(bytes: Uint8Array | ArrayBuffer, opts: OpenOptions = {}): Promise<CryoContainer> {
+    return CryoContainer.fromSource(new MemorySource(bytes), opts);
+  }
+
+  /** Open over any random-access source: one scan, manifest read from entry #1. */
+  static async fromSource(source: RandomAccessSource, opts: OpenOptions = {}): Promise<CryoContainer> {
+    const index = await scanTarSource(source);
+    const manifestEntry = index.get(MANIFEST_PATH);
+    let manifest: ContainerManifest;
+    if (manifestEntry) {
+      const buf = await source.read(manifestEntry.offset, manifestEntry.size);
+      manifest = parseManifest(TEXT.decode(buf));
+    } else {
+      // Tolerate a container without a manifest: synthesize a minimal, valid one
+      // (a manifest-less container is invalid per the v2.1.0 contract, but reads
+      // stay best-effort). Assume the historical 'scene' kind.
+      manifest = createManifest('scene', 'container');
+    }
+    return new CryoContainer(source, index, manifest, opts.hasher);
   }
 
   get manifest(): ContainerManifest {
@@ -126,30 +129,34 @@ export class CryoContainer {
     return this.index.has(path);
   }
 
-  /** Read an entry body as a Buffer — seek+read, no unpacking. */
-  async read(path: string): Promise<Buffer> {
+  /** Read an entry body as bytes — seek+read, no unpacking. */
+  async read(path: string): Promise<Uint8Array> {
     this.assertOpen();
     if (this.pending.has(path)) {
       const pend = this.pending.get(path);
       if (pend === null) throw new Error(`Entry removed: ${path}`);
-      return Buffer.from(pend!);
+      return pend!;
     }
     const entry = this.index.get(path);
     if (!entry) throw new Error(`Entry not found: ${path}`);
-    return readBody(this.fd, entry);
+    if (entry.size === 0) return new Uint8Array(0);
+    return this.source.read(entry.offset, entry.size);
   }
 
   /** Read an entry body as UTF-8 text. */
   async readText(path: string): Promise<string> {
-    return (await this.read(path)).toString('utf-8');
+    return TEXT.decode(await this.read(path));
   }
 
   /**
-   * Stream an entry body — for large assets, a positioned createReadStream over
-   * the container fd's byte range (no intermediate buffer, no unpacking).
+   * Stream an entry body. Uses the source's zero-copy byte-range stream when
+   * available (fs); otherwise falls back to a one-shot read (isomorphic).
    */
   stream(path: string): Readable {
     this.assertOpen();
+    // Lazy require so the browser bundle (which never streams) needs no 'stream'.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { Readable } = require('stream') as typeof import('stream');
     if (this.pending.has(path)) {
       const pend = this.pending.get(path);
       if (pend === null) throw new Error(`Entry removed: ${path}`);
@@ -157,20 +164,23 @@ export class CryoContainer {
     }
     const entry = this.index.get(path);
     if (!entry) throw new Error(`Entry not found: ${path}`);
-    if (entry.size === 0) return Readable.from(Buffer.alloc(0));
-    return createReadStream(this.path, {
-      start: entry.offset,
-      end: entry.offset + entry.size - 1,
-    });
+    if (entry.size === 0) return Readable.from(new Uint8Array(0));
+    if (this.source.streamRange) {
+      return this.source.streamRange(entry.offset, entry.offset + entry.size);
+    }
+    const self = this;
+    return Readable.from((async function* () {
+      yield await self.read(path);
+    })());
   }
 
   // -- Write path (buffered; committed by flush) ---------------------------
 
-  /** Stage an entry write. Takes effect in the file only after `flush`. */
-  async put(path: string, data: Buffer | string): Promise<void> {
+  /** Stage an entry write. Takes effect in the backing only after `flush`. */
+  async put(path: string, data: Uint8Array | string): Promise<void> {
     this.assertOpen();
     assertSafePath(path);
-    this.pending.set(path, typeof data === 'string' ? Buffer.from(data, 'utf-8') : data);
+    this.pending.set(path, typeof data === 'string' ? new TextEncoder().encode(data) : data);
   }
 
   /** Stage an entry removal. Takes effect only after `flush`. */
@@ -186,17 +196,19 @@ export class CryoContainer {
   }
 
   /**
-   * Commit staged writes: rebuild the tar (manifest first, sha256 recomputed),
-   * write it to a temp file, atomically rename over the original, then reopen
-   * and rescan. Reads before/after remain real random-access.
+   * Commit staged writes: rebuild the tar (manifest first, sha256 recomputed via
+   * the hasher when present), atomically replace the backing, then rescan.
+   * Requires a writable source. Reads before/after stay random-access.
    */
   async flush(): Promise<void> {
     this.assertOpen();
     if (this.pending.size === 0) return;
+    if (!isWritableSource(this.source)) {
+      throw new Error('CryoContainer: source is read-only; cannot flush');
+    }
 
-    // Materialize the full, ordered set of entries (excluding manifest, which
-    // we regenerate and place first).
-    const bodies = new Map<string, Buffer>();
+    // Materialize the full, ordered set of entries (manifest regenerated first).
+    const bodies = new Map<string, Uint8Array>();
     const order: string[] = [];
     for (const [path] of this.effectiveEntries()) {
       if (path === MANIFEST_PATH) continue;
@@ -204,38 +216,22 @@ export class CryoContainer {
       order.push(path);
     }
 
-    // Rebuild manifest contents with fresh sizes + sha256.
     const contents: ContentEntry[] = order.map((path) => {
       const body = bodies.get(path)!;
-      return {
-        path,
-        type: inferContentType(path),
-        size: body.length,
-        sha256: sha256Hex(body),
-      };
+      const entry: ContentEntry = { path, type: inferContentType(path), size: body.length };
+      if (this.hasher) entry.sha256 = this.hasher(body);
+      return entry;
     });
-    const manifest: ContainerManifest = {
-      ...this._manifest,
-      contents,
-    };
+    const manifest: ContainerManifest = { ...this._manifest, contents };
 
-    // manifest.json MUST be the first tar entry.
-    const entries: Array<[string, Buffer | string]> = [
+    const entries: Array<[string, Uint8Array | string]> = [
       [MANIFEST_PATH, serializeManifest(manifest)],
-      ...order.map((p): [string, Buffer] => [p, bodies.get(p)!]),
+      ...order.map((p): [string, Uint8Array] => [p, bodies.get(p)!]),
     ];
     const tar = encodeTar(entries);
 
-    // Atomic replace: temp + rename in the same directory.
-    const tmp = join(dirname(this.path), `.${basename(this.path)}.tmp-${process.pid}`);
-    await fsp.writeFile(tmp, tar);
-    await closeAsync(this.fd);
-    await fsp.rename(tmp, this.path);
-
-    // Reopen + rescan so the handle reflects the committed file.
-    this.fd = await openAsync(this.path, 'r');
-    const stat = await fsp.stat(this.path);
-    this.index = await scanTarFd(this.fd, stat.size);
+    await this.source.replaceAll(tar);
+    this.index = await scanTarSource(this.source);
     this._manifest = manifest;
     this.pending.clear();
   }
@@ -243,7 +239,7 @@ export class CryoContainer {
   async close(): Promise<void> {
     if (this.closed) return;
     this.closed = true;
-    await closeAsync(this.fd).catch(() => undefined);
+    await this.source.close().catch(() => undefined);
   }
 
   // -- Convenience ----------------------------------------------------------
@@ -267,7 +263,6 @@ export class CryoContainer {
       if (val === null) {
         merged.delete(path);
       } else {
-        // Offset is meaningless for pending entries; size is what matters here.
         merged.set(path, { offset: -1, size: val.length, type: 'file' });
       }
     }
@@ -279,22 +274,7 @@ export class CryoContainer {
   }
 }
 
-/** Open a container. Thin convenience wrapper over `CryoContainer.open`. */
+/** Open a container from a file path. Thin Node convenience over `open`. */
 export function openContainer(path: string, opts?: OpenOptions): Promise<CryoContainer> {
   return CryoContainer.open(path, opts);
-}
-
-// ============================================================================
-// Helpers
-// ============================================================================
-
-async function readBody(fd: number, entry: IndexEntry): Promise<Buffer> {
-  if (entry.size === 0) return Buffer.alloc(0);
-  const buf = Buffer.alloc(entry.size);
-  await readAsync(fd, buf, 0, entry.size, entry.offset);
-  return buf;
-}
-
-export function sha256Hex(data: Buffer): string {
-  return createHash('sha256').update(data).digest('hex');
 }

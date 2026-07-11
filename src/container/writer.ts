@@ -9,8 +9,9 @@ import { promises as fsp } from 'fs';
 import { join, relative, sep } from 'path';
 
 import { encodeTar } from './tar-index';
-import { sha256Hex } from './reader';
+import { sha256Hex } from './sha256';
 import {
+  ContainerKind,
   ContainerManifest,
   ContentEntry,
   MANIFEST_PATH,
@@ -21,6 +22,8 @@ import {
 } from './manifest';
 
 export interface PackOptions {
+  /** Semantic category of the container (default: 'scene'). */
+  kind?: ContainerKind;
   /** Primary scene entry path within the container. Auto-detected if omitted. */
   entry?: string;
   /** Container display name (default: folder basename). */
@@ -71,14 +74,16 @@ export async function packFolder(
   }
 
   // Seed manifest from an existing one if present.
+  const fallbackName = opts.name ?? basename(srcDir);
   let manifest: ContainerManifest;
   try {
     const existing = await fsp.readFile(join(srcDir, MANIFEST_PATH), 'utf-8');
     manifest = parseManifest(existing);
   } catch {
-    manifest = createManifest('');
+    manifest = createManifest(opts.kind ?? 'scene', fallbackName);
   }
 
+  const kind = opts.kind ?? manifest.kind ?? 'scene';
   const entry = opts.entry ?? (manifest.entry || detectEntry(allPaths));
   const name = opts.name ?? manifest.name ?? basename(srcDir);
 
@@ -87,7 +92,8 @@ export async function packFolder(
     return { path, type: inferContentType(path), size: body.length, sha256: sha256Hex(body) };
   });
 
-  manifest = { ...manifest, entry, name, contents };
+  manifest = { ...manifest, kind, name, contents };
+  if (entry) manifest.entry = entry;
 
   const entries: Array<[string, Buffer | string]> = [
     [MANIFEST_PATH, serializeManifest(manifest)],

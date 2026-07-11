@@ -12,19 +12,13 @@
  * trivial and avoids a runtime dependency (see MIGRATION-cryo-container.md §4.5).
  */
 
-import { read as fsRead } from 'fs';
-import { promisify } from 'util';
-
-const readAsync = promisify(fsRead) as unknown as (
-  fd: number,
-  buffer: Buffer,
-  offset: number,
-  length: number,
-  position: number
-) => Promise<{ bytesRead: number; buffer: Buffer }>;
+import type { RandomAccessSource } from './source';
 
 /** tar operates in 512-byte blocks. */
 export const TAR_BLOCK = 512;
+
+/** Shared decoder for the small ASCII header fields (isomorphic). */
+const DECODER = new TextDecoder('utf-8');
 
 /** USTAR magic lives at offset 257 of every header block. */
 const USTAR_MAGIC = 'ustar';
@@ -52,26 +46,30 @@ export function roundUp(n: number): number {
   return Math.ceil(n / TAR_BLOCK) * TAR_BLOCK;
 }
 
-/** Parse an octal numeric tar field (may be space/NUL padded). */
-function parseOctal(buf: Buffer, start: number, len: number): number {
-  let s = buf.toString('ascii', start, start + len);
-  // Trim NULs and spaces; empty → 0.
-  s = s.replace(/[\0 ]+$/g, '').replace(/^[\0 ]+/g, '').trim();
-  if (s === '') return 0;
-  return parseInt(s, 8) || 0;
+/** Parse an octal numeric tar field (may be space/NUL padded). Uint8Array-based. */
+function parseOctal(block: Uint8Array, start: number, len: number): number {
+  let s = '';
+  for (let i = start; i < start + len; i++) {
+    const c = block[i];
+    if (c === 0 || c === 0x20) continue; // skip NUL / space padding
+    s += String.fromCharCode(c);
+  }
+  s = s.trim();
+  return s === '' ? 0 : parseInt(s, 8) || 0;
 }
 
-/** Read a NUL-terminated ASCII string field. */
-function parseString(buf: Buffer, start: number, len: number): string {
-  const slice = buf.subarray(start, start + len);
-  const nul = slice.indexOf(0);
-  return slice.toString('utf-8', 0, nul === -1 ? slice.length : nul);
+/** Read a NUL-terminated string field. Uint8Array-based. */
+function parseString(block: Uint8Array, start: number, len: number): string {
+  let end = start;
+  const max = Math.min(start + len, block.length);
+  while (end < max && block[end] !== 0) end++;
+  return DECODER.decode(block.subarray(start, end));
 }
 
 /** True if the 512-byte block is entirely zero (tar end-of-archive marker). */
-function isZeroBlock(buf: Buffer): boolean {
-  for (let i = 0; i < buf.length; i++) {
-    if (buf[i] !== 0) return false;
+function isZeroBlock(block: Uint8Array): boolean {
+  for (let i = 0; i < block.length; i++) {
+    if (block[i] !== 0) return false;
   }
   return true;
 }
@@ -84,22 +82,22 @@ interface ParsedHeader {
 }
 
 /** Parse a single 512-byte USTAR header block. Returns null for a zero block. */
-function parseHeader(block: Buffer): ParsedHeader | null {
+function parseHeader(block: Uint8Array): ParsedHeader | null {
   if (isZeroBlock(block)) return null;
 
-  const magic = block.toString('ascii', USTAR_MAGIC_OFFSET, USTAR_MAGIC_OFFSET + 5);
+  const magic = parseString(block, USTAR_MAGIC_OFFSET, 5);
   if (magic !== USTAR_MAGIC) {
     throw new Error('bad magic at offset 257');
   }
 
   const name = parseString(block, 0, 100);
   const size = parseOctal(block, 124, 12);
-  const typeflag = block.toString('ascii', 156, 157);
+  const typeByte = block[156];
   const prefix = parseString(block, 345, 155);
 
   let type: TarEntryType = 'other';
-  if (typeflag === '0' || typeflag === '\0' || typeflag === '') type = 'file';
-  else if (typeflag === '5') type = 'dir';
+  if (typeByte === 0x30 || typeByte === 0 || typeByte === 0x20) type = 'file'; // '0', NUL, space
+  else if (typeByte === 0x35) type = 'dir'; // '5'
 
   return { name, size, type, prefix };
 }
@@ -113,7 +111,7 @@ function fullPath(h: ParsedHeader): string {
  * Scan a whole tar buffer into an offset index.
  * The insertion order of the returned Map matches the tar's physical order.
  */
-export function scanTarBuffer(buf: Buffer): TarIndex {
+export function scanTarBuffer(buf: Uint8Array): TarIndex {
   const index: TarIndex = new Map();
   let pos = 0;
 
@@ -132,19 +130,20 @@ export function scanTarBuffer(buf: Buffer): TarIndex {
 }
 
 /**
- * Scan a tar via an open file descriptor without loading the whole file.
- * Reads one header block, seeks past the body, repeats — this is what makes
- * the container behave like a sqlite handle for large archives.
+ * Scan a tar via a `RandomAccessSource` without loading the whole file: read one
+ * header block, seek past the body, repeat. This positioned-read scan is what
+ * makes the container behave like a sqlite handle for large archives — and it
+ * runs unchanged over any backing (fs, memory, browser Blob).
  */
-export async function scanTarFd(fd: number, fileSize: number): Promise<TarIndex> {
+export async function scanTarSource(source: RandomAccessSource): Promise<TarIndex> {
   const index: TarIndex = new Map();
+  const fileSize = source.size;
   let pos = 0;
-  const header = Buffer.alloc(TAR_BLOCK);
 
   while (pos + TAR_BLOCK <= fileSize) {
-    const { bytesRead } = await readAsync(fd, header, 0, TAR_BLOCK, pos);
-    if (bytesRead < TAR_BLOCK) break;
-    const parsed = parseHeader(header);
+    const block = await source.read(pos, TAR_BLOCK);
+    if (block.length < TAR_BLOCK) break;
+    const parsed = parseHeader(block);
     if (parsed === null) break; // end-of-archive
     const bodyOffset = pos + TAR_BLOCK;
     const path = fullPath(parsed);
@@ -197,8 +196,8 @@ function splitPath(path: string): { name: string; prefix: string } {
  * Encode one file entry (header + NUL-padded body) as tar blocks.
  * `data` may be a string (utf-8) or Buffer.
  */
-export function encodeTarEntry(path: string, data: Buffer | string): Buffer {
-  const body = typeof data === 'string' ? Buffer.from(data, 'utf-8') : data;
+export function encodeTarEntry(path: string, data: Uint8Array | string): Buffer {
+  const body = typeof data === 'string' ? Buffer.from(data, 'utf-8') : Buffer.from(data);
   const { name, prefix } = splitPath(path);
 
   const header = Buffer.alloc(TAR_BLOCK);
@@ -226,7 +225,7 @@ export function encodeTarEntry(path: string, data: Buffer | string): Buffer {
 }
 
 /** Build a complete tar from ordered [path, data] entries (+ end marker). */
-export function encodeTar(entries: Array<[string, Buffer | string]>): Buffer {
+export function encodeTar(entries: Array<[string, Uint8Array | string]>): Buffer {
   const parts: Buffer[] = entries.map(([p, d]) => encodeTarEntry(p, d));
   // Two zero blocks mark end-of-archive.
   parts.push(Buffer.alloc(TAR_BLOCK * 2));

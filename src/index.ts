@@ -30,7 +30,7 @@ export * from './container';
 import { readFileSync } from 'fs';
 import { parse, ParseResult } from './parser';
 import { compile, serialize, OutputFormat } from './compiler';
-import { sniffFile } from './container/sniff';
+import { sniffFile } from './container/sniff-file';
 import { openContainer, CryoContainer } from './container/reader';
 
 /**

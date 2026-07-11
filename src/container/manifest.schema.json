@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://chevp.github.io/cryojs/schema/manifest.schema.json",
+  "title": "Cryo Container Manifest",
+  "description": "manifest.json — the mandatory first entry of a .cryo container. Valid only if the five required keys are present: format, version, kind, name, contents. Only entry (and $schema/preview) are optional. Per-kind structural rules are the `allOf` conditionals below.",
+  "type": "object",
+  "required": ["format", "version", "kind", "name", "contents"],
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "required": ["kind"],
+        "properties": { "kind": { "enum": ["scene", "material", "shader", "asset-pack"] } }
+      },
+      "then": { "required": ["entry"] }
+    },
+    {
+      "if": {
+        "required": ["kind"],
+        "properties": { "kind": { "const": "shader" } }
+      },
+      "then": {
+        "properties": {
+          "contents": {
+            "contains": {
+              "type": "object",
+              "required": ["path"],
+              "properties": { "path": { "const": "shader-index.json" } }
+            },
+            "minContains": 1
+          }
+        }
+      }
+    }
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Reference to this schema; enables editor validation."
+    },
+    "format": {
+      "const": "cryo-container",
+      "description": "Container format discriminator. Must equal 'cryo-container'."
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Container format version, e.g. '2.1.0'.",
+      "examples": ["2.1.0"]
+    },
+    "kind": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Semantic category Kosmos dispatches on. Known kinds: scene, material, shader, asset-pack (each requires `entry`; shader also requires a shader-index.json). The value stays open for future kinds.",
+      "examples": ["scene", "material", "shader", "asset-pack"]
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-readable container name."
+    },
+    "contents": {
+      "type": "array",
+      "description": "Entry inventory. May be empty, but the key must be present.",
+      "items": { "$ref": "#/$defs/contentEntry" }
+    },
+    "entry": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Optional. Path of the primary payload, e.g. 'scenes/main.cryo.xml'."
+    },
+    "preview": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Optional. Link to a preview image — a container-internal path (e.g. '.kosmos/preview.png') or an external URL."
+    }
+  },
+  "$defs": {
+    "contentEntry": {
+      "type": "object",
+      "required": ["path", "type", "size"],
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Relative, forward-slash path within the container.",
+          "pattern": "^(?!/)(?!.*\\\\)(?!.*(^|/)\\.\\.(/|$)).+$"
+        },
+        "type": {
+          "enum": ["scene", "script", "asset", "compiled", "meta", "other"],
+          "description": "Logical role of the entry (informational)."
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Byte length of the entry body."
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "Optional hex sha256 of the entry body."
+        }
+      }
+    }
+  }
+}
