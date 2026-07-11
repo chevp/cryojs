@@ -5,7 +5,7 @@
  * Nothing is uploaded; everything runs locally.
  */
 
-import { readTar, entryBytes, sniff } from './tar.js';
+import { readTar, entryBytes } from './tar.js';
 import { validateCryo } from './validate.js';
 
 const MANIFEST_PATH = 'manifest.json';
@@ -41,32 +41,12 @@ async function loadFile(file) {
     return;
   }
   const buf = await file.arrayBuffer();
-  const kind = sniff(buf);
   // Keep the whole .cryo as a Blob so the sidebar file node can be dragged out
   // to another program as the complete file (never a single entry).
   const fileRef = { name: file.name, blob: new Blob([buf], { type: 'application/octet-stream' }) };
 
-  if (kind === 'xml') {
-    els.validation.hidden = true;
-    const text = new TextDecoder('utf-8').decode(new Uint8Array(buf));
-    state = {
-      bytes: null,
-      entries: [{ path: file.name, size: buf.byteLength, type: 'file', _xml: text }],
-      manifest: { name: file.name, format: 'legacy-xml', version: '1.x', entry: file.name },
-      active: null,
-      file: fileRef,
-    };
-    renderSidebar();
-    selectEntry(state.entries[0]);
-    return;
-  }
-  if (kind !== 'container') {
-    renderValidation({ ok: false, errors: [{ message: 'Not a cryo container (no USTAR tar structure).' }], warnings: [] });
-    return;
-  }
-
-  // Validate the container structure + rules before showing it.
-  const report = await validateCryo(buf);
+  // Validity: a tar containing manifest.json.
+  const report = validateCryo(buf);
   renderValidation(report);
 
   // Parse for display (lenient); fall back to the validator's entry list if the
@@ -81,15 +61,7 @@ async function loadFile(file) {
   }
   if (!entries.length) return;
 
-  let manifest = null;
-  const mEntry = entries.find((e) => e.path === MANIFEST_PATH);
-  if (mEntry) {
-    try {
-      manifest = JSON.parse(new TextDecoder('utf-8').decode(entryBytes(bytes, mEntry)));
-    } catch {
-      manifest = null;
-    }
-  }
+  const manifest = report.manifest;
   state = { bytes, entries, manifest, active: null, file: fileRef };
   renderSidebar();
 
@@ -217,7 +189,7 @@ function renderFileNode() {
     return;
   }
   els.fileSection.hidden = false;
-  const totalSize = state.bytes ? state.bytes.length : state.file.blob.size;
+  const totalSize = state.file.blob.size;
 
   const node = document.createElement('div');
   node.className = 'nav-item file-node';
@@ -265,7 +237,7 @@ function renderPreview(entry) {
   panel.innerHTML = '';
 
   const isImage = /\.(png|jpg|jpeg|gif|webp)$/i.test(entry.path);
-  const isText = /\.(xml|lua|json|txt|md|pbtxt|glsl|frag|vert)$/i.test(entry.path) || entry._xml;
+  const isText = /\.(xml|lua|json|txt|md|pbtxt|glsl|frag|vert)$/i.test(entry.path);
 
   if (isImage && state.bytes) {
     const blob = new Blob([entryBytes(state.bytes, entry)]);
@@ -285,8 +257,7 @@ function renderPreview(entry) {
   }
 
   if (isText) {
-    let text = entry._xml;
-    if (text == null) text = new TextDecoder('utf-8').decode(entryBytes(state.bytes, entry));
+    let text = new TextDecoder('utf-8').decode(entryBytes(state.bytes, entry));
     if (entry.path.endsWith('.json') || entry.path === MANIFEST_PATH) {
       try {
         text = JSON.stringify(JSON.parse(text), null, 2);

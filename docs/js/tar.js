@@ -47,7 +47,7 @@ export function readTar(arrayBuffer) {
     if (isZero(bytes, pos)) break; // end-of-archive
     const magic = str(bytes, pos + 257, 5);
     if (magic !== 'ustar') {
-      throw new Error('Not a cryo container (missing USTAR magic).');
+      throw new Error('Not a cryo container.');
     }
     const name = str(bytes, pos, 100);
     const size = octal(bytes, pos + 124, 12);

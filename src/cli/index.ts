@@ -416,7 +416,7 @@ program
     try {
       const filePath = resolve(file);
       if ((await sniffFile(filePath)) !== 'container') {
-        console.error(chalk.yellow('Not a container (.cryo tar). Legacy XML .cryo has no entries.'));
+        console.error(chalk.yellow('Not a container (.cryo).'));
         process.exit(1);
       }
       const c = await openContainer(filePath);

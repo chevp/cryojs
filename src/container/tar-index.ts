@@ -89,7 +89,7 @@ function parseHeader(block: Buffer): ParsedHeader | null {
 
   const magic = block.toString('ascii', USTAR_MAGIC_OFFSET, USTAR_MAGIC_OFFSET + 5);
   if (magic !== USTAR_MAGIC) {
-    throw new Error('Not a USTAR archive (bad magic at offset 257)');
+    throw new Error('bad magic at offset 257');
   }
 
   const name = parseString(block, 0, 100);
