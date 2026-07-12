@@ -1,6 +1,6 @@
 {
   "name": "@cryo/cryojs",
-  "version": "3.1.1",
+  "version": "3.1.2",
   "description": "Node.js tooling library for Cryo Engine - .cryo file parsing, validation, compilation, and random-access container access",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
