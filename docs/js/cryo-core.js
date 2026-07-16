@@ -7059,8 +7059,8 @@ var require_json_schema_2020_12 = __commonJS({
         with$data(this, validation)
       ].forEach((sch) => this.addMetaSchema(sch, void 0, false));
       return this;
-      function with$data(ajv2, sch) {
-        return $data ? ajv2.$dataMetaSchema(sch, META_SUPPORT_DATA) : sch;
+      function with$data(ajv, sch) {
+        return $data ? ajv.$dataMetaSchema(sch, META_SUPPORT_DATA) : sch;
       }
     }
     exports.default = addMetaSchema2020;
@@ -7360,14 +7360,18 @@ var manifest_schema_default = {
 var MANIFEST_SCHEMA_URL = manifest_schema_default.$id;
 var MANIFEST_SCHEMA = manifest_schema_default;
 var KNOWN_KINDS = ["scene", "material", "shader", "asset-pack"];
-var ajv = new import__.default({ allErrors: true, strict: false });
-var validator = ajv.compile(manifest_schema_default);
+var validator;
+function getValidator() {
+  if (!validator) validator = new import__.default({ allErrors: true, strict: false }).compile(manifest_schema_default);
+  return validator;
+}
 function formatError(err) {
   const where = err.instancePath === "" ? "(root)" : err.instancePath;
   return `${where} ${err.message ?? "is invalid"}`.trim();
 }
 function validateManifest(obj) {
-  return validator(obj) ? [] : (validator.errors ?? []).map(formatError);
+  const v = getValidator();
+  return v(obj) ? [] : (v.errors ?? []).map(formatError);
 }
 var validateManifestSchema = validateManifest;
 
@@ -7451,18 +7455,102 @@ var MemorySource = class {
   async close() {
   }
 };
+
+// src/tiles.ts
+var TILE_GRADIENT_ANGLE = "135deg";
+var SQUIRCLE_MASK = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath fill='%23000' d='M50 0C78 0 100 22 100 50C100 78 78 100 50 100C22 100 0 78 0 50C0 22 22 0 50 0Z'/%3E%3C/svg%3E") center / 100% 100% no-repeat`;
+function tileGradient(spec, angle = TILE_GRADIENT_ANGLE) {
+  return `linear-gradient(${angle}, ${spec.colors[0]}, ${spec.colors[1]})`;
+}
+var DEFAULT_TILE = {
+  kind: "default",
+  label: "General",
+  icon: "fa-solid fa-snowflake",
+  colors: ["#78aadc", "#5b8ec4"]
+};
+var BUILTIN_TILES = [
+  // ── Known cryo container kinds (schema.ts KNOWN_KINDS) ──
+  { kind: "scene", label: "Scene", icon: "fa-solid fa-cube", colors: ["#3b82f6", "#2563eb"] },
+  // blue
+  { kind: "material", label: "Material", icon: "fa-solid fa-palette", colors: ["#06b6d4", "#0891b2"] },
+  // cyan
+  { kind: "shader", label: "Shader", icon: "fa-solid fa-bolt", colors: ["#a855f7", "#9333ea"] },
+  // purple
+  { kind: "asset-pack", label: "Asset Pack", icon: "fa-solid fa-box-archive", colors: ["#22c55e", "#16a34a"] },
+  // green
+  // ── Content kinds ──
+  { kind: "script", label: "Script", icon: "fa-solid fa-scroll", colors: ["#f97316", "#ea580c"] },
+  // orange
+  { kind: "prefab", label: "Prefab", icon: "fa-solid fa-puzzle-piece", colors: ["#ec4899", "#db2777"] },
+  // pink
+  { kind: "world", label: "World", icon: "fa-solid fa-earth-americas", colors: ["#14b8a6", "#0d9488"] },
+  // teal
+  { kind: "audio", label: "Audio", icon: "fa-solid fa-music", colors: ["#6366f1", "#4f46e5"] },
+  // indigo
+  { kind: "texture", label: "Texture", icon: "fa-solid fa-image", colors: ["#f59e0b", "#d97706"] },
+  // amber
+  { kind: "animation", label: "Animation", icon: "fa-solid fa-film", colors: ["#ef4444", "#dc2626"] },
+  // red
+  { kind: "ui", label: "UI", icon: "fa-solid fa-table-columns", colors: ["#84cc16", "#65a30d"] },
+  // lime
+  // ── General (non-kosmos) container categories ──
+  { kind: "vault", label: "Vault", icon: "fa-solid fa-vault", colors: ["#64748b", "#475569"], group: "general" },
+  // slate
+  { kind: "snapshot", label: "Snapshot", icon: "fa-solid fa-camera-retro", colors: ["#0ea5e9", "#0284c7"], group: "general" },
+  // sky
+  { kind: "archive", label: "Archive", icon: "fa-solid fa-file-zipper", colors: ["#78716c", "#57534e"], group: "general" },
+  // stone
+  { kind: "dataset", label: "Dataset", icon: "fa-solid fa-database", colors: ["#10b981", "#059669"], group: "general" },
+  // emerald
+  { kind: "document", label: "Document", icon: "fa-solid fa-file-lines", colors: ["#71717a", "#52525b"], group: "general" },
+  // zinc
+  { kind: "model", label: "Model", icon: "fa-solid fa-brain", colors: ["#8b5cf6", "#7c3aed"], group: "general" },
+  // violet
+  { kind: "plugin", label: "Plugin", icon: "fa-solid fa-plug", colors: ["#f43f5e", "#e11d48"], group: "general" },
+  // rose
+  { kind: "template", label: "Template", icon: "fa-solid fa-clone", colors: ["#eab308", "#ca8a04"], group: "general" }
+  // yellow
+];
+var CONTENT_TILES = BUILTIN_TILES.filter(
+  (t) => (t.group ?? "content") === "content"
+);
+var GENERAL_TILES = BUILTIN_TILES.filter(
+  (t) => t.group === "general"
+);
+var REGISTRY = /* @__PURE__ */ new Map();
+for (const t of BUILTIN_TILES) REGISTRY.set(t.kind, t);
+function registerTile(spec) {
+  REGISTRY.set(spec.kind, spec);
+}
+function allTiles() {
+  return [...REGISTRY.values()];
+}
+function tileForKind(kind) {
+  if (!kind) return DEFAULT_TILE;
+  return REGISTRY.get(kind) ?? DEFAULT_TILE;
+}
 export {
+  BUILTIN_TILES,
+  CONTENT_TILES,
+  DEFAULT_TILE,
+  GENERAL_TILES,
   KNOWN_KINDS,
   MANIFEST_PATH,
   MANIFEST_SCHEMA,
   MANIFEST_SCHEMA_URL,
   MemorySource,
+  SQUIRCLE_MASK,
   TAR_BLOCK,
+  TILE_GRADIENT_ANGLE,
+  allTiles,
   entryBytes,
   inferContentType,
   inspectBytes,
+  registerTile,
   scanTarBuffer,
   scanTarSource,
   sniffBytes,
+  tileForKind,
+  tileGradient,
   validateManifest
 };

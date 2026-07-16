@@ -23,8 +23,17 @@ export const MANIFEST_SCHEMA = manifestSchema;
 /** Kinds with dedicated structural rules in the schema. */
 export const KNOWN_KINDS = ['scene', 'material', 'shader', 'asset-pack'];
 
-const ajv = new Ajv2020({ allErrors: true, strict: false });
-const validator: ValidateFunction = ajv.compile(manifestSchema);
+// Compiled lazily (on first validateManifest call), not at module load: ajv's
+// codegen runs `new Function(...)`, which a strict CSP (e.g. Electron's
+// `script-src 'self'` with no `unsafe-eval`) refuses to execute. Consumers that
+// only want the tile registry (this file's exports sit behind the same
+// `browser.ts` barrel) must be able to import this module without tripping
+// that — an eager top-level `ajv.compile()` broke exactly that case.
+let validator: ValidateFunction | undefined;
+function getValidator(): ValidateFunction {
+  if (!validator) validator = new Ajv2020({ allErrors: true, strict: false }).compile(manifestSchema);
+  return validator;
+}
 
 /** Format one ajv error as `<path> <message>` (path relative to the manifest). */
 function formatError(err: ErrorObject): string {
@@ -38,7 +47,8 @@ function formatError(err: ErrorObject): string {
  * empty list means valid.
  */
 export function validateManifest(obj: unknown): string[] {
-  return validator(obj) ? [] : (validator.errors ?? []).map(formatError);
+  const v = getValidator();
+  return v(obj) ? [] : (v.errors ?? []).map(formatError);
 }
 
 // Back-compat aliases: kind rules now live inside the one schema, so these all

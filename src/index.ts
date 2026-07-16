@@ -26,6 +26,9 @@ export {
 // Container (random-access .cryo tar container)
 export * from './container';
 
+// Container tiles — canonical per-`kind` visual identity (symbol + colour + shape)
+export * from './tiles';
+
 // Convenience functions
 import { readFileSync } from 'fs';
 import { parse, ParseResult } from './parser';

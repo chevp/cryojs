@@ -41,3 +41,19 @@ export {
 // out of an ArrayBuffer, the browser twin of Node's fs-backed positioned reads.
 // (The full fs-backed CryoContainer lives at the package root, Node only.)
 export { MemorySource } from './container/source';
+
+// Container tiles — the canonical per-`kind` visual identity (symbol + colour +
+// squircle), so every consumer renders identical tiles from one source.
+export {
+  TILE_GRADIENT_ANGLE,
+  SQUIRCLE_MASK,
+  DEFAULT_TILE,
+  BUILTIN_TILES,
+  CONTENT_TILES,
+  GENERAL_TILES,
+  tileGradient,
+  registerTile,
+  allTiles,
+  tileForKind,
+} from './tiles';
+export type { CryoTileSpec, TileGroup } from './tiles';
