@@ -58,6 +58,19 @@ export interface ContainerManifest {
   /** Optional. Path of the primary payload, e.g. 'scenes/main.cryo.xml'. */
   entry?: string;
   /**
+   * Optional. Path of a deterministic-boot .kosaction file, consumed by
+   * frostclient's native KosactionLoader (not the full TypeScript kosaction
+   * runner). A container carrying this alongside `afrost` is a frostclient
+   * agent package rather than a plain frostplayer/irisplayer scene package.
+   */
+  kosaction?: string;
+  /**
+   * Optional. Path of a .afrost agent descriptor, consumed by frostclient
+   * after the `kosaction` boot completes to drive an LLM turn-loop over
+   * irisdaemon capabilities.
+   */
+  afrost?: string;
+  /**
    * Optional. Link to a preview image — either a container-internal path
    * (e.g. '.kosmos/preview.png') or an external URL. Used by Kosmos for
    * thumbnails without opening the payload.
@@ -83,7 +96,7 @@ export function createManifest(
 }
 
 /** Optional string fields copied through verbatim when validation passes. */
-const OPTIONAL_STRING_FIELDS = ['$schema', 'entry', 'preview'] as const;
+const OPTIONAL_STRING_FIELDS = ['$schema', 'entry', 'kosaction', 'afrost', 'preview'] as const;
 
 /**
  * Parse and validate a manifest JSON string. Throws unless all five required

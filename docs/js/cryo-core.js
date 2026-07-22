@@ -7319,6 +7319,16 @@ var manifest_schema_default = {
       minLength: 1,
       description: "Optional. Path of the primary payload, e.g. 'scenes/main.cryo.xml'."
     },
+    kosaction: {
+      type: "string",
+      minLength: 1,
+      description: "Optional. Path of a deterministic-boot .kosaction file, consumed by frostclient's native KosactionLoader (not the full TypeScript kosaction runner). A container carrying this alongside `afrost` is a frostclient agent package rather than a plain frostplayer/irisplayer scene package."
+    },
+    afrost: {
+      type: "string",
+      minLength: 1,
+      description: "Optional. Path of a .afrost agent descriptor, consumed by frostclient after the `kosaction` boot completes to drive an LLM turn-loop over irisdaemon capabilities."
+    },
     preview: {
       type: "string",
       minLength: 1,
