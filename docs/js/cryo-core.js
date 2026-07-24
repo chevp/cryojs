@@ -7482,6 +7482,10 @@ var BUILTIN_TILES = [
   // ── Known cryo container kinds (schema.ts KNOWN_KINDS) ──
   { kind: "scene", label: "Scene", icon: "fa-solid fa-cube", colors: ["#3b82f6", "#2563eb"] },
   // blue
+  // Same tile as 'scene': a bootable, game.db-backed pack (see eon-compiler's
+  // buildCryoPackDir) is still a scene to the user, just packed differently.
+  { kind: "scene-db", label: "Scene", icon: "fa-solid fa-cube", colors: ["#3b82f6", "#2563eb"] },
+  // blue
   { kind: "material", label: "Material", icon: "fa-solid fa-palette", colors: ["#06b6d4", "#0891b2"] },
   // cyan
   { kind: "shader", label: "Shader", icon: "fa-solid fa-bolt", colors: ["#a855f7", "#9333ea"] },

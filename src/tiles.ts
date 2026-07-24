@@ -73,6 +73,9 @@ export const DEFAULT_TILE: CryoTileSpec = {
 export const BUILTIN_TILES: readonly CryoTileSpec[] = [
   // ── Known cryo container kinds (schema.ts KNOWN_KINDS) ──
   { kind: 'scene',      label: 'Scene',      icon: 'fa-solid fa-cube',           colors: ['#3b82f6', '#2563eb'] }, // blue
+  // Same tile as 'scene': a bootable, game.db-backed pack (see eon-compiler's
+  // buildCryoPackDir) is still a scene to the user, just packed differently.
+  { kind: 'scene-db',   label: 'Scene',      icon: 'fa-solid fa-cube',           colors: ['#3b82f6', '#2563eb'] }, // blue
   { kind: 'material',   label: 'Material',   icon: 'fa-solid fa-palette',        colors: ['#06b6d4', '#0891b2'] }, // cyan
   { kind: 'shader',     label: 'Shader',     icon: 'fa-solid fa-bolt',           colors: ['#a855f7', '#9333ea'] }, // purple
   { kind: 'asset-pack', label: 'Asset Pack', icon: 'fa-solid fa-box-archive',    colors: ['#22c55e', '#16a34a'] }, // green
