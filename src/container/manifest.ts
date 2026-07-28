@@ -58,15 +58,17 @@ export interface ContainerManifest {
   /** Optional. Path of the primary payload, e.g. 'scenes/main.cryo.xml'. */
   entry?: string;
   /**
-   * Optional. Path of a deterministic-boot .kosaction file, consumed by
-   * frostclient's native KosactionLoader (not the full TypeScript kosaction
-   * runner). A container carrying this alongside `afrost` is a frostclient
-   * agent package rather than a plain frostplayer/irisplayer scene package.
+   * Optional. Path of a deterministic-boot `frostboot.yaml` file, consumed by
+   * frostclient's native FrostBootLoader. This is NOT the loom-orchestrated
+   * `.kosaction` job format -- frostboot.yaml is frostclient's own narrow
+   * {wait, camera, script} boot recipe. A container carrying this alongside
+   * `afrost` is a frostclient agent package rather than a plain
+   * frostplayer/irisplayer scene package.
    */
-  kosaction?: string;
+  frostboot?: string;
   /**
    * Optional. Path of a .afrost agent descriptor, consumed by frostclient
-   * after the `kosaction` boot completes to drive an LLM turn-loop over
+   * after the `frostboot` boot completes to drive an LLM turn-loop over
    * irisdaemon capabilities.
    */
   afrost?: string;
@@ -96,7 +98,7 @@ export function createManifest(
 }
 
 /** Optional string fields copied through verbatim when validation passes. */
-const OPTIONAL_STRING_FIELDS = ['$schema', 'entry', 'kosaction', 'afrost', 'preview'] as const;
+const OPTIONAL_STRING_FIELDS = ['$schema', 'entry', 'frostboot', 'afrost', 'preview'] as const;
 
 /**
  * Parse and validate a manifest JSON string. Throws unless all five required

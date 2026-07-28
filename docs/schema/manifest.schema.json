@@ -70,6 +70,16 @@
       "minLength": 1,
       "description": "Optional. Path of the primary payload, e.g. 'scenes/main.cryo.xml'."
     },
+    "frostboot": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Optional. Path of a deterministic-boot frostboot.yaml file, consumed by irisagent's native FrostBootLoader. This is NOT the loom-orchestrated .kosaction job format -- frostboot.yaml is irisagent's own narrow {wait, camera, script} boot recipe. A container carrying this alongside `afrost` is a irisagent agent package rather than a plain irisscript/irisplayer scene package."
+    },
+    "afrost": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Optional. Path of a .afrost agent descriptor, consumed by irisagent after the `frostboot` boot completes to drive an LLM turn-loop over irisdaemon capabilities."
+    },
     "preview": {
       "type": "string",
       "minLength": 1,
