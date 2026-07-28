@@ -20,6 +20,7 @@
     "cryojs": "./dist/cli/index.js"
   },
   "scripts": {
+    "prepare": "npm run build",
     "build": "tsc && npm run build:browser",
     "build:watch": "tsc -w",
     "build:browser": "node scripts/build-browser.js",
