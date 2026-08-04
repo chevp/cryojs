@@ -73,12 +73,12 @@
     "frostboot": {
       "type": "string",
       "minLength": 1,
-      "description": "Optional. Path of a deterministic-boot frostboot.yaml file, consumed by irisagent's native FrostBootLoader. This is NOT the loom-orchestrated .kosaction job format -- frostboot.yaml is irisagent's own narrow {wait, camera, script} boot recipe. A container carrying this alongside `afrost` is a irisagent agent package rather than a plain irisscript/irisplayer scene package."
+      "description": "Optional. Path of a deterministic-boot frostboot.yaml file: a narrow {wait, camera, script} boot recipe, NOT the loom-orchestrated .kosaction job format. CURRENTLY UNCONSUMED -- its only reader was irisagent's FrostBootLoader, retired with that binary (see runtime/iris/docs/RETIRED-irisagent-formats.md, which preserves the format). Kept declared so existing manifests stay valid."
     },
     "afrost": {
       "type": "string",
       "minLength": 1,
-      "description": "Optional. Path of a .afrost agent descriptor, consumed by irisagent after the `frostboot` boot completes to drive an LLM turn-loop over irisdaemon capabilities."
+      "description": "Optional. Path of a .afrost agent descriptor, to drive an agent turn-loop over iris daemon capabilities after the `frostboot` boot completes. CURRENTLY UNCONSUMED from a container, same reason as `frostboot`. The .afrost format itself is alive -- the Electron chat panel reads it directly -- just not via this field."
     },
     "preview": {
       "type": "string",

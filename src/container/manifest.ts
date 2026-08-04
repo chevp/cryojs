@@ -58,18 +58,27 @@ export interface ContainerManifest {
   /** Optional. Path of the primary payload, e.g. 'scenes/main.cryo.xml'. */
   entry?: string;
   /**
-   * Optional. Path of a deterministic-boot `frostboot.yaml` file, consumed by
-   * frostclient's native FrostBootLoader. This is NOT the loom-orchestrated
-   * `.kosaction` job format -- frostboot.yaml is frostclient's own narrow
-   * {wait, camera, script} boot recipe. A container carrying this alongside
-   * `afrost` is a frostclient agent package rather than a plain
-   * frostplayer/irisplayer scene package.
+   * Optional. Path of a deterministic-boot `frostboot.yaml` file: a narrow
+   * {wait, camera, script} boot recipe, NOT the loom-orchestrated
+   * `.kosaction` job format.
+   *
+   * CURRENTLY UNCONSUMED. Its only reader was irisagent's FrostBootLoader,
+   * retired along with that binary — see
+   * runtime/iris/docs/RETIRED-irisagent-formats.md, which preserves the
+   * format definition. The field stays declared (and therefore valid in an
+   * existing manifest) so packed containers do not fail validation; nothing
+   * acts on it today.
    */
   frostboot?: string;
   /**
-   * Optional. Path of a .afrost agent descriptor, consumed by frostclient
-   * after the `frostboot` boot completes to drive an LLM turn-loop over
-   * irisdaemon capabilities.
+   * Optional. Path of a .afrost agent descriptor, to drive an agent turn-loop
+   * over iris daemon capabilities once the `frostboot` boot completes.
+   *
+   * CURRENTLY UNCONSUMED from a container, for the same reason as
+   * `frostboot` above. `.afrost` itself is very much alive — the Electron
+   * chat panel reads it directly
+   * (apps/container/renderer/src/app/shared/chat-ai/) — but no longer via
+   * this manifest field.
    */
   afrost?: string;
   /**
